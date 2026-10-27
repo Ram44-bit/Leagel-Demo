@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LexAI — Intelligent Legal Case Assistant</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f7ff',
+              100: '#e0effe',
+              200: '#b9dffd',
+              300: '#7cc5fc',
+              400: '#36a7f8',
+              500: '#0c8ce9',
+              600: '#006fc7',
+              700: '#0158a1',
+              800: '#064b85',
+              900: '#0b3f6e',
+              950: '#072849',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .glass { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(12px); }
+    .card-hover { transition: all 0.2s ease; }
+    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 12px 24px -8px rgba(0,0,0,0.4); }
+    .priority-critical { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+    .priority-high { background: linear-gradient(135deg, #f97316, #c2410c); }
+    .priority-medium { background: linear-gradient(135deg, #eab308, #a16207); }
+    .priority-low { background: linear-gradient(135deg, #22c55e, #15803d); }
+    .timeline-line::before {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #334155;
+    }
+    .toast {
+      animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s forwards;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes fadeOut {
+      to { opacity: 0; transform: translateX(20px); }
+    }
+    .ai-thinking {
+      background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .metric-card {
+      background: linear-gradient(145deg, #0f172a, #1e293b);
+    }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/90 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center font-bold text-white text-sm shadow-lg shadow-brand-500/30">
+            LA
+          </div>
+          <div>
+            <h1 class="font-bold text-lg tracking-tight">LexAI</h1>
+            <p class="text-[10px] text-slate-400 -mt-0.5">Intelligent Legal Case Assistant</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <!-- Search -->
+          <div class="relative hidden sm:block">
+            <input id="global-search" type="text" placeholder="Smart search cases... (Ctrl+K)"
+              class="w-64 bg-slate-900 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent placeholder:text-slate-500">
+            <svg class="w-4 h-4 absolute left-3 top-2.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+          </div>
+
+          <button id="theme-toggle" class="p-2 rounded-lg hover:bg-slate-800 transition" title="Toggle theme">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+            </svg>
+          </button>
+
+          <div class="flex items-center gap-2 pl-3 border-l border-slate-700">
+            <div class="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-xs font-semibold">RK</div>
+            <span class="text-sm hidden md:block">Rahul Kapoor, Esq.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- DASHBOARD VIEW -->
+    <div id="dashboard-view">
+      <!-- Impact Metrics -->
+      <div class="mb-8">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-bold">Impact Dashboard</h2>
+          <span class="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded">Last 30 days</span>
+        </div>
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="metric-card rounded-xl p-5 border border-slate-800 card-hover">
+            <div class="flex items-center justify-between">
+              <p class="text-sm text-slate-400">Hours Saved / Week</p>
+              <span class="text-emerald-400 text-xs font-medium">↑ 18%</span>
+            </div>
+            <p class="text-3xl font-bold mt-1 text-emerald-400">4.2 hrs</p>
+            <p class="text-xs text-slate-500 mt-1">per lawyer</p>
+          </div>
+          <div class="metric-card rounded-xl p-5 border border-slate-800 card-hover">
+            <div class="flex items-center justify-between">
+              <p class="text-sm text-slate-400">Cases Processed</p>
+              <span class="text-brand-400 text-xs font-medium">↑ 24%</span>
+            </div>
+            <p class="text-3xl font-bold mt-1">47</p>
+            <p class="text-xs text-slate-500 mt-1">this month</p>
+          </div>
+          <div class="metric-card rounded-xl p-5 border border-slate-800 card-hover">
+            <div class="flex items-center justify-between">
+              <p class="text-sm text-slate-400">Deadlines Caught</p>
+              <span class="text-amber-400 text-xs font-medium">Critical</span>
+            </div>
+            <p class="text-3xl font-bold mt-1 text-amber-400">12</p>
+            <p class="text-xs text-slate-500 mt-1">auto-flagged</p>
+          </div>
+          <div class="metric-card rounded-xl p-5 border border-slate-800 card-hover">
+            <div class="flex items-center justify-between">
+              <p class="text-sm text-slate-400">Est. Cost Saved</p>
+              <span class="text-emerald-400 text-xs font-medium">↑ 31%</span>
+            </div>
+            <p class="text-3xl font-bold mt-1">₹1.8L</p>
+            <p class="text-xs text-slate-500 mt-1">billable hours recovered</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters + Actions -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+        <div class="flex items-center gap-2">
+          <h2 class="text-xl font-bold">Active Cases</h2>
+          <span id="case-count" class="bg-slate-800 text-slate-300 text-xs px-2 py-0.5 rounded-full">6</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="priority-filter" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <option value="all">All Priorities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <button onclick="runBulkAI()" class="bg-brand-600 hover:bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+            Run AI Analysis
+          </button>
+        </div>
+      </div>
+
+      <!-- Case Cards Grid -->
+      <div id="cases-grid" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <!-- Cases injected by JS -->
+      </div>
+    </div>
+
+    <!-- DETAIL VIEW -->
+    <div id="detail-view" class="hidden">
+      <button onclick="showDashboard()" class="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition text-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+        Back to Dashboard
+      </button>
+
+      <div id="detail-content">
+        <!-- Injected by JS -->
+      </div>
+    </div>
+  </main>
+
+  <!-- Keyboard Shortcuts Modal (hidden) -->
+  <div id="shortcuts-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-md mx-4">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-bold text-lg">Keyboard Shortcuts</h3>
+        <button onclick="document.getElementById('shortcuts-modal').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <div class="space-y-3 text-sm">
+        <div class="flex justify-between"><span>Search</span><kbd class="bg-slate-800 px-2 py-0.5 rounded text-xs">Ctrl + K</kbd></div>
+        <div class="flex justify-between"><span>Go to Dashboard</span><kbd class="bg-slate-800 px-2 py-0.5 rounded text-xs">Esc</kbd></div>
+        <div class="flex justify-between"><span>Show Shortcuts</span><kbd class="bg-slate-800 px-2 py-0.5 rounded text-xs">?</kbd></div>
+        <div class="flex justify-between"><span>Toggle Theme</span><kbd class="bg-slate-800 px-2 py-0.5 rounded text-xs">T</kbd></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===================== DATA =====================
+    const cases = [
+      {
+        id: 1,
+        title: "Sharma vs. Apex Constructions Pvt. Ltd.",
+        type: "Civil - Breach of Contract",
+        client: "Rajesh Sharma",
+        court: "Delhi High Court",
+        filingDate: "2025-03-12",
+        nextHearing: "2026-11-05",
+        priorityScore: 94,
+        priority: "critical",
+        status: "Active",
+        summary: "Plaintiff alleges non-completion of residential project and delayed possession despite full payment. Seeks specific performance + damages of ₹2.4 Cr.",
+        documents: 47,
+        lastActivity: "2 hours ago",
+        opposingCounsel: "Mehta & Associates",
+        predictedOutcome: { winProb: 68, settlementLikely: 72, estimatedDuration: "14-18 months" },
+        conflicts: [
+          { type: "Potential Conflict", desc: "Opposing counsel previously represented a related entity of your client in 2022 (conflict check recommended)" }
+        ],
+        timeline: [
+          { date: "2025-03-12", event: "Suit filed", type: "filing" },
+          { date: "2025-05-20", event: "Written statement filed by defendant", type: "response" },
+          { date: "2025-08-14", event: "Interim injunction granted", type: "order" },
+          { date: "2026-01-09", event: "Evidence stage commenced", type: "hearing" },
+          { date: "2026-11-05", event: "Next hearing - Final arguments", type: "upcoming" }
+        ]
+      },
+      {
+        id: 2,
+        title: "State vs. Vikram Malhotra",
+        type: "Criminal - IPC 420, 467",
+        client: "Vikram Malhotra (Accused)",
+        court: "Sessions Court, Mumbai",
+        filingDate: "2024-11-03",
+        nextHearing: "2026-10-30",
+        priorityScore: 88,
+        priority: "critical",
+        status: "Active",
+        summary: "Accused charged with cheating and forgery related to a ₹4.8 Cr land deal. Bail application pending. Strong documentary evidence from defense.",
+        documents: 63,
+        lastActivity: "Yesterday",
+        opposingCounsel: "Public Prosecutor",
+        predictedOutcome: { winProb: 55, settlementLikely: 30, estimatedDuration: "8-12 months" },
+        conflicts: [],
+        timeline: [
+          { date: "2024-11-03", event: "FIR registered", type: "filing" },
+          { date: "2024-12-15", event: "Chargesheet filed", type: "response" },
+          { date: "2025-04-22", event: "Bail rejected by Sessions Court", type: "order" },
+          { date: "2026-10-30", event: "Next hearing - Arguments on discharge", type: "upcoming" }
+        ]
+      },
+      {
+        id: 3,
+        title: "TechNova Innovations vs. InnovateSoft",
+        type: "IP - Trademark Infringement",
+        client: "TechNova Innovations Pvt. Ltd.",
+        court: "IPAB / Delhi HC",
+        filingDate: "2025-07-18",
+        nextHearing: "2026-12-12",
+        priorityScore: 71,
+        priority: "high",
+        status: "Active",
+        summary: "Client claims respondent is using a deceptively similar mark in the SaaS space. Seeks permanent injunction and damages.",
+        documents: 29,
+        lastActivity: "3 days ago",
+        opposingCounsel: "Singhania & Partners",
+        predictedOutcome: { winProb: 74, settlementLikely: 65, estimatedDuration: "10-14 months" },
+        conflicts: [
+          { type: "No Conflict", desc: "Conflict check cleared against opposing counsel and parties." }
+        ],
+        timeline: [
+          { date: "2025-07-18", event: "Suit instituted", type: "filing" },
+          { date: "2025-09-05", event: "Ex-parte interim injunction granted", type: "order" },
+          { date: "2026-12-12", event: "Next hearing - Evidence", type: "upcoming" }
+        ]
+      },
+      {
+        id: 4,
+        title: "Priya Mehta vs. Horizon Developers",
+        type: "Consumer - Real Estate",
+        client: "Priya Mehta",
+        court: "NCDRC / State Commission",
+        filingDate: "2025-01-22",
+        nextHearing: "2026-11-18",
+        priorityScore: 62,
+        priority: "medium",
+        status: "Active",
+        summary: "Buyer seeking refund + compensation for delayed possession of flat booked in 2021. RERA order already in favor of client.",
+        documents: 18,
+        lastActivity: "1 week ago",
+        opposingCounsel: "Khaitan & Co.",
+        predictedOutcome: { winProb: 82, settlementLikely: 78, estimatedDuration: "6-9 months" },
+        conflicts: [],
+        timeline: [
+          { date: "2025-01-22", event: "Complaint filed before State Commission", type: "filing" },
+          { date: "2025-06-10", event: "RERA order in favor of complainant", type: "order" },
+          { date: "2026-11-18", event: "Next hearing", type: "upcoming" }
+        ]
+      },
+      {
+        id: 5,
+        title: "GreenEnergy Ltd. vs. State of Maharashtra",
+        type: "Writ - Environmental Clearance",
+        client: "GreenEnergy Ltd.",
+        court: "Bombay High Court",
+        filingDate: "2025-09-01",
+        nextHearing: "2027-01-15",
+        priorityScore: 45,
+        priority: "medium",
+        status: "Active",
+        summary: "Challenge to cancellation of environmental clearance for a 120 MW solar project. Strong public interest angle.",
+        documents: 52,
+        lastActivity: "5 days ago",
+        opposingCounsel: "Advocate General Office",
+        predictedOutcome: { winProb: 48, settlementLikely: 25, estimatedDuration: "18-24 months" },
+        conflicts: [],
+        timeline: [
+          { date: "2025-09-01", event: "Writ petition filed", type: "filing" },
+          { date: "2025-10-20", event: "Notice issued to respondents", type: "order" },
+          { date: "2027-01-15", event: "Next hearing", type: "upcoming" }
+        ]
+      },
+      {
+        id: 6,
+        title: "Kapoor Family Trust vs. Tax Authorities",
+        type: "Tax - Assessment Dispute",
+        client: "Kapoor Family Trust",
+        court: "ITAT Mumbai",
+        filingDate: "2024-08-14",
+        nextHearing: "2026-11-28",
+        priorityScore: 38,
+        priority: "low",
+        status: "Active",
+        summary: "Appeal against reassessment order for AY 2019-20. Quantum dispute of ₹1.1 Cr involving capital gains treatment.",
+        documents: 34,
+        lastActivity: "2 weeks ago",
+        opposingCounsel: "Departmental Representative",
+        predictedOutcome: { winProb: 61, settlementLikely: 40, estimatedDuration: "12-16 months" },
+        conflicts: [],
+        timeline: [
+          { date: "2024-08-14", event: "Appeal filed before ITAT", type: "filing" },
+          { date: "2025-03-11", event: "Stay granted on demand", type: "order" },
+          { date: "2026-11-28", event: "Next hearing - Final arguments", type: "upcoming" }
+        ]
+      }
+    ];
+
+    let currentView = 'dashboard';
+    let filteredCases = [...cases];
+
+    // ===================== TOAST =====================
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const colors = {
+        success: 'bg-emerald-600',
+        error: 'bg-red-600',
+        info: 'bg-brand-600',
+        warning: 'bg-amber-600'
+      };
+      toast.className = `toast ${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg text-sm font-medium flex items-center gap-2 max-w-sm`;
+      toast.innerHTML = `
+        <span>${message}</span>
+      `;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // ===================== RENDER CASES =====================
+    function getPriorityBadge(priority) {
+      const map = {
+        critical: 'priority-critical',
+        high: 'priority-high',
+        medium: 'priority-medium',
+        low: 'priority-low'
+      };
+      return map[priority] || 'bg-slate-600';
+    }
+
+    function daysUntil(dateStr) {
+      const today = new Date('2026-10-27');
+      const target = new Date(dateStr);
+      const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+      return diff;
+    }
+
+    function renderCases() {
+      const grid = document.getElementById('cases-grid');
+      const filter = document.getElementById('priority-filter').value;
+      filteredCases = filter === 'all' ? [...cases] : cases.filter(c => c.priority === filter);
+      document.getElementById('case-count').textContent = filteredCases.length;
+
+      grid.innerHTML = filteredCases.map(c => {
+        const days = daysUntil(c.nextHearing);
+        const urgency = days <= 7 ? 'text-red-400' : days <= 21 ? 'text-amber-400' : 'text-slate-400';
+        return `
+          <div onclick="openCase(${c.id})" class="bg-slate-900 border border-slate-800 rounded-xl p-5 card-hover cursor-pointer group">
+            <div class="flex items-start justify-between mb-3">
+              <span class="${getPriorityBadge(c.priority)} text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">
+                ${c.priority} · ${c.priorityScore}
+              </span>
+              <span class="text-xs text-slate-500">${c.lastActivity}</span>
+            </div>
+            <h3 class="font-semibold text-base group-hover:text-brand-400 transition line-clamp-2 mb-1">${c.title}</h3>
+            <p class="text-xs text-slate-400 mb-3">${c.type} · ${c.court}</p>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-500">Next: <span class="${urgency} font-medium">${c.nextHearing} (${days}d)</span></span>
+              <span class="bg-slate-800 px-2 py-0.5 rounded">${c.documents} docs</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ===================== DETAIL VIEW =====================
+    function openCase(id) {
+      const c = cases.find(x => x.id === id);
+      if (!c) return;
+
+      currentView = 'detail';
+      document.getElementById('dashboard-view').classList.add('hidden');
+      document.getElementById('detail-view').classList.remove('hidden');
+
+      const days = daysUntil(c.nextHearing);
+
+      document.getElementById('detail-content').innerHTML = `
+        <!-- Header -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-6">
+          <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2 mb-2">
+                <span class="${getPriorityBadge(c.priority)} text-white text-xs font-bold px-2.5 py-1 rounded uppercase">
+                  ${c.priority} Priority · Score ${c.priorityScore}
+                </span>
+                <span class="bg-slate-800 text-slate-300 text-xs px-2 py-1 rounded">${c.status}</span>
+              </div>
+              <h1 class="text-2xl font-bold mb-1">${c.title}</h1>
+              <p class="text-slate-400 text-sm">${c.type} · ${c.court}</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button onclick="generateSummary(${c.id})" class="bg-brand-600 hover:bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                AI Summarize
+              </button>
+              <button onclick="generateTimeline(${c.id})" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+                Generate Timeline
+              </button>
+              <button onclick="checkConflict(${c.id})" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+                Conflict Check
+              </button>
+              <button onclick="predictOutcome(${c.id})" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+                Predict Outcome
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid lg:grid-cols-3 gap-6">
+          <!-- Left Column -->
+          <div class="lg:col-span-2 space-y-6">
+            <!-- Case Info -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+              <h3 class="font-semibold mb-4 flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-brand-500"></span>
+                Case Overview
+              </h3>
+              <div class="grid sm:grid-cols-2 gap-4 text-sm">
+                <div><span class="text-slate-500">Client</span><p class="font-medium">${c.client}</p></div>
+                <div><span class="text-slate-500">Opposing Counsel</span><p class="font-medium">${c.opposingCounsel}</p></div>
+                <div><span class="text-slate-500">Filing Date</span><p class="font-medium">${c.filingDate}</p></div>
+                <div><span class="text-slate-500">Next Hearing</span><p class="font-medium ${days <= 7 ? 'text-red-400' : ''}">${c.nextHearing} (${days} days)</p></div>
+                <div><span class="text-slate-500">Documents</span><p class="font-medium">${c.documents} files</p></div>
+                <div><span class="text-slate-500">Last Activity</span><p class="font-medium">${c.lastActivity}</p></div>
+              </div>
+              <div class="mt-4 pt-4 border-t border-slate-800">
+                <span class="text-slate-500 text-sm">Brief Summary</span>
+                <p class="text-sm mt-1 leading-relaxed">${c.summary}</p>
+              </div>
+            </div>
+
+            <!-- AI Output Area -->
+            <div id="ai-output" class="bg-slate-900 border border-slate-800 rounded-xl p-5 min-h-[200px]">
+              <h3 class="font-semibold mb-3 flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                AI Insights
+              </h3>
+              <p class="text-slate-500 text-sm">Click any AI action above to generate insights. Results will appear here.</p>
+            </div>
+          </div>
+
+          <!-- Right Column -->
+          <div class="space-y-6">
+            <!-- Priority & Deadline -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+              <h3 class="font-semibold mb-4">Priority & Deadline</h3>
+              <div class="mb-4">
+                <div class="flex justify-between text-sm mb-1">
+                  <span>AI Priority Score</span>
+                  <span class="font-bold">${c.priorityScore}/100</span>
+                </div>
+                <div class="h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div class="h-full ${getPriorityBadge(c.priority)}" style="width: ${c.priorityScore}%"></div>
+                </div>
+              </div>
+              <div class="text-sm space-y-2">
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Days to Hearing</span>
+                  <span class="font-medium ${days <= 7 ? 'text-red-400' : days <= 21 ? 'text-amber-400' : ''}">${days} days</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Risk Level</span>
+                  <span class="font-medium">${c.priority === 'critical' ? 'Very High' : c.priority === 'high' ? 'High' : 'Moderate'}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Timeline Preview -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+              <h3 class="font-semibold mb-4">Case Timeline Preview</h3>
+              <div class="relative timeline-line space-y-4 pl-8">
+                ${c.timeline.slice(-3).map(t => `
+                  <div class="relative">
+                    <div class="absolute -left-8 w-3.5 h-3.5 rounded-full ${t.type === 'upcoming' ? 'bg-brand-500 ring-4 ring-brand-500/20' : 'bg-slate-600'} top-1"></div>
+                    <p class="text-xs text-slate-500">${t.date}</p>
+                    <p class="text-sm font-medium">${t.event}</p>
+                  </div>
+                `).join('')}
+              </div>
+              <button onclick="generateTimeline(${c.id})" class="mt-4 text-brand-400 text-sm hover:underline">View full AI timeline →</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function showDashboard() {
+      currentView = 'dashboard';
+      document.getElementById('detail-view').classList.add('hidden');
+      document.getElementById('dashboard-view').classList.remove('hidden');
+    }
+
+    // ===================== AI FEATURES (Simulated with realistic delay) =====================
+    function setAILoading(message) {
+      document.getElementById('ai-output').innerHTML = `
+        <h3 class="font-semibold mb-3 flex items-center gap-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          AI Insights
+        </h3>
+        <div class="space-y-3">
+          <div class="ai-thinking h-4 rounded w-3/4"></div>
+          <div class="ai-thinking h-4 rounded w-full"></div>
+          <div class="ai-thinking h-4 rounded w-5/6"></div>
+          <p class="text-sm text-slate-400 mt-4">${message}</p>
+        </div>
+      `;
+    }
+
+    function generateSummary(id) {
+      const c = cases.find(x => x.id === id);
+      setAILoading('Analyzing case documents and generating executive summary...');
+      showToast('AI Summarization started...', 'info');
+
+      setTimeout(() => {
+        document.getElementById('ai-output').innerHTML = `
+          <h3 class="font-semibold mb-3 flex items-center gap-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            AI Auto-Summary
+            <span class="text-xs text-slate-500 font-normal ml-auto">Generated just now</span>
+          </h3>
+          <div class="bg-slate-950/50 rounded-lg p-4 text-sm leading-relaxed space-y-3">
+            <p><strong class="text-brand-400">Executive Summary:</strong> ${c.summary}</p>
+            <p><strong class="text-brand-400">Key Issues:</strong></p>
+            <ul class="list-disc list-inside text-slate-300 space-y-1 ml-1">
+              <li>Primary claim revolves around ${c.type.toLowerCase()}.</li>
+              <li>Next critical date is ${c.nextHearing} — ${daysUntil(c.nextHearing)} days remaining.</li>
+              <li>Document corpus: ${c.documents} files analyzed. No major missing pleadings detected.</li>
+              <li>Recommended immediate action: Prepare for ${c.timeline[c.timeline.length-1].event.toLowerCase()}.</li>
+            </ul>
+            <p class="text-xs text-slate-500 pt-2 border-t border-slate-800">Confidence: 91% · Based on case metadata + similar past matters</p>
+          </div>
+        `;
+        showToast('Summary generated successfully', 'success');
+      }, 1800);
+    }
+
+    function generateTimeline(id) {
+      const c = cases.find(x => x.id === id);
+      setAILoading('Building chronological case timeline from filings & orders...');
+      showToast('Generating AI Case Timeline...', 'info');
+
+      setTimeout(() => {
+        document.getElementById('ai-output').innerHTML = `
+          <h3 class="font-semibold mb-3 flex items-center gap-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            AI Case Timeline Generator
+          </h3>
+          <div class="relative timeline-line space-y-5 pl-8 mt-4">
+            ${c.timeline.map(t => `
+              <div class="relative">
+                <div class="absolute -left-8 w-3.5 h-3.5 rounded-full ${t.type === 'upcoming' ? 'bg-brand-500 ring-4 ring-brand-500/30' : t.type === 'order' ? 'bg-amber-500' : 'bg-slate-600'} top-1"></div>
+                <p class="text-xs text-slate-500">${t.date}</p>
+                <p class="text-sm font-medium ${t.type === 'upcoming' ? 'text-brand-400' : ''}">${t.event}</p>
+                <p class="text-xs text-slate-500 capitalize">${t.type}</p>
+              </div>
+            `).join('')}
+          </div>
+          <p class="text-xs text-slate-500 mt-4 pt-3 border-t border-slate-800">Timeline auto-extracted from pleadings, orders & cause list entries.</p>
+        `;
+        showToast('Timeline generated', 'success');
+      }, 1600);
+    }
+
+    function checkConflict(id) {
+      const c = cases.find(x => x.id === id);
+      setAILoading('Running conflict-of-interest scan across firm matters & opposing parties...');
+      showToast('Running Conflict Detector...', 'info');
+
+      setTimeout(() => {
+        const hasConflict = c.conflicts.length > 0 && c.conflicts[0].type.includes('Potential');
+        document.getElementById('ai-output').innerHTML = `
+          <h3 class="font-semibold mb-3 flex items-center gap-2">
+            <span class="w-1.5 h-1.5 rounded-full ${hasConflict ? 'bg-amber-500' : 'bg-emerald-500'}"></span>
+            Conflict-of-Interest Detector
+          </h3>
+          <div class="space-y-3">
+            ${c.conflicts.length === 0 || !hasConflict ? `
+              <div class="bg-emerald-950/40 border border-emerald-800/50 rounded-lg p-4 flex items-start gap-3">
+                <span class="text-emerald-400 text-xl">✓</span>
+                <div>
+                  <p class="font-medium text-emerald-400">No conflicts detected</p>
+                  <p class="text-sm text-slate-400 mt-1">Cleared against opposing counsel, related entities, and active firm matters.</p>
+                </div>
+              </div>
+            ` : c.conflicts.map(cf => `
+              <div class="bg-amber-950/40 border border-amber-800/50 rounded-lg p-4 flex items-start gap-3">
+                <span class="text-amber-400 text-xl">⚠</span>
+                <div>
+                  <p class="font-medium text-amber-400">${cf.type}</p>
+                  <p class="text-sm text-slate-300 mt-1">${cf.desc}</p>
+                </div>
+              </div>
+            `).join('')}
+            <p class="text-xs text-slate-500">Scan completed against 1,240 firm matters + public records.</p>
+          </div>
+        `;
+        showToast(hasConflict ? 'Potential conflict flagged' : 'Conflict check clear', hasConflict ? 'warning' : 'success');
+      }, 2000);
+    }
+
+    function predictOutcome(id) {
+      const c = cases.find(x => x.id === id);
+      setAILoading('Running predictive model on similar precedents & case factors...');
+      showToast('Predicting case outcome...', 'info');
+
+      setTimeout(() => {
+        const p = c.predictedOutcome;
+        document.getElementById('ai-output').innerHTML = `
+          <h3 class="font-semibold mb-3 flex items-center gap-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            Predictive Case Outcome
+          </h3>
+          <div class="grid sm:grid-cols-3 gap-4 mb-4">
+            <div class="bg-slate-950/60 rounded-lg p-4 text-center">
+              <p class="text-3xl font-bold text-brand-400">${p.winProb}%</p>
+              <p class="text-xs text-slate-400 mt-1">Win Probability</p>
+            </div>
+            <div class="bg-slate-950/60 rounded-lg p-4 text-center">
+              <p class="text-3xl font-bold text-amber-400">${p.settlementLikely}%</p>
+              <p class="text-xs text-slate-400 mt-1">Settlement Likelihood</p>
+            </div>
+            <div class="bg-slate-950/60 rounded-lg p-4 text-center">
+              <p class="text-xl font-bold text-slate-200">${p.estimatedDuration}</p>
+              <p class="text-xs text-slate-400 mt-1">Est. Duration</p>
+            </div>
+          </div>
+          <div class="text-sm text-slate-300 space-y-2">
+            <p><strong class="text-brand-400">Model notes:</strong> Based on 340+ similar ${c.type.split(' - ')[0].toLowerCase()} matters, court disposition patterns, and strength of documentary evidence.</p>
+            <p class="text-xs text-slate-500">This is a probabilistic estimate, not legal advice. Always apply professional judgment.</p>
+          </div>
+        `;
+        showToast('Outcome prediction ready', 'success');
+      }, 2200);
+    }
+
+    function runBulkAI() {
+      showToast('Running priority scoring + deadline prediction on all cases...', 'info');
+      setTimeout(() => {
+        showToast('AI analysis complete — 2 critical deadlines flagged', 'success');
+      }, 1500);
+    }
+
+    // ===================== SEARCH =====================
+    document.getElementById('global-search').addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase().trim();
+      if (!q) {
+        filteredCases = [...cases];
+      } else {
+        filteredCases = cases.filter(c =>
+          c.title.toLowerCase().includes(q) ||
+          c.client.toLowerCase().includes(q) ||
+          c.type.toLowerCase().includes(q) ||
+          c.court.toLowerCase().includes(q) ||
+          c.summary.toLowerCase().includes(q)
+        );
+      }
+      // Force re-render with current filter logic
+      const grid = document.getElementById('cases-grid');
+      document.getElementById('case-count').textContent = filteredCases.length;
+      grid.innerHTML = filteredCases.map(c => {
+        const days = daysUntil(c.nextHearing);
+        const urgency = days <= 7 ? 'text-red-400' : days <= 21 ? 'text-amber-400' : 'text-slate-400';
+        return `
+          <div onclick="openCase(${c.id})" class="bg-slate-900 border border-slate-800 rounded-xl p-5 card-hover cursor-pointer group">
+            <div class="flex items-start justify-between mb-3">
+              <span class="${getPriorityBadge(c.priority)} text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">
+                ${c.priority} · ${c.priorityScore}
+              </span>
+              <span class="text-xs text-slate-500">${c.lastActivity}</span>
+            </div>
+            <h3 class="font-semibold text-base group-hover:text-brand-400 transition line-clamp-2 mb-1">${c.title}</h3>
+            <p class="text-xs text-slate-400 mb-3">${c.type} · ${c.court}</p>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-500">Next: <span class="${urgency} font-medium">${c.nextHearing} (${days}d)</span></span>
+              <span class="bg-slate-800 px-2 py-0.5 rounded">${c.documents} docs</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    });
+
+    // ===================== FILTER =====================
+    document.getElementById('priority-filter').addEventListener('change', renderCases);
+
+    // ===================== KEYBOARD SHORTCUTS =====================
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        document.getElementById('global-search').focus();
+      }
+      if (e.key === 'Escape') {
+        if (currentView === 'detail') showDashboard();
+        document.getElementById('shortcuts-modal').classList.add('hidden');
+      }
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT') {
+        document.getElementById('shortcuts-modal').classList.toggle('hidden');
+      }
+      if (e.key === 't' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT') {
+        document.documentElement.classList.toggle('dark');
+        showToast('Theme toggled', 'info');
+      }
+    });
+
+    // Theme toggle button
+    document.getElementById('theme-toggle').addEventListener('click', () => {
+      document.documentElement.classList.toggle('dark');
+      showToast('Theme toggled', 'info');
+    });
+
+    // Init
+    renderCases();
+    showToast('Welcome to LexAI Demo — Press ? for shortcuts', 'info');
+  </script>
+</body>
+</html>
